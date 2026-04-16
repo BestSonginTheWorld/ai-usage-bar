@@ -1,0 +1,23 @@
+╭─── Claude Code v2.1.109 ───────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting started                                          │
+│                 Welcome back Song!                 │ Run /init to create a CLAUDE.md file with instructions for Claude │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+❯ /usage
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Status   Config   Usage   Stats
+
+  Current session
+  ██████                                             12% used
+  Resets 6pm (Asia/Seoul)
+
+  Current week (all models)
+  ████████████████▌                                  33% used
+  Resets Apr 17 at 2pm (Asia/Seoul)
+
+  Current week (Sonnet only)
+                                                     0% used
+  Resets 6pm (Asia/Seoul)
+
+  Esc to cancel

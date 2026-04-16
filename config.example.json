@@ -1,0 +1,11 @@
+{
+  "enabled_providers": ["claude", "codex"],
+  "refresh_interval_seconds": 900,
+  "stale_after_seconds": 1800,
+  "stale_after_failures": 2,
+  "debug_captures": true,
+  "reset_label_style": "friendly",
+  "show_reset_labels": true,
+  "show_sonnet_metric": true,
+  "show_error_details": true
+}

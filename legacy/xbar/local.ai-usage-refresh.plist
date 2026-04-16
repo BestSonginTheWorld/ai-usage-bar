@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>local.ai-usage-refresh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/bin/env</string>
+      <string>python3</string>
+      <string>/Users/dev/Desktop/Project/manu-bar/update_ai_usage.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/dev/Library/Application Support/AIUsageMenuBar/workdir</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/dev/Library/Application Support/AIUsageMenuBar/logs/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/dev/Library/Application Support/AIUsageMenuBar/logs/launchd.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+  </dict>
+</plist>
