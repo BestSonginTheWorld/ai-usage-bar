@@ -153,6 +153,63 @@ private func fileModificationDate(_ url: URL) -> Date? {
     return attributes[.modificationDate] as? Date
 }
 
+private func makeUpdateTimeFormatter() -> DateFormatter {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.autoupdatingCurrent
+    formatter.timeStyle = .short
+    formatter.dateStyle = .none
+    return formatter
+}
+
+private func makeUpdateDateTimeFormatter() -> DateFormatter {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.autoupdatingCurrent
+    formatter.setLocalizedDateFormatFromTemplate("MMM d h:mm a")
+    return formatter
+}
+
+private func makeUpdateTooltipFormatter() -> DateFormatter {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.autoupdatingCurrent
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .medium
+    return formatter
+}
+
+private func cacheWrittenAtDate(_ cache: UsageCache?) -> Date? {
+    guard let writtenAt = cache?.writtenAt else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: writtenAt)
+}
+
+private func updateAgeText(since date: Date, now: Date = Date()) -> String {
+    let seconds = max(0, Int(now.timeIntervalSince(date)))
+    if seconds < 60 {
+        return "just now"
+    }
+    if seconds < 3600 {
+        return "\(seconds / 60)m ago"
+    }
+    if seconds < 86_400 {
+        return "\(seconds / 3600)h ago"
+    }
+    return "\(seconds / 86_400)d ago"
+}
+
+private func updateMenuLabel(_ cache: UsageCache?) -> String {
+    guard let date = cacheWrittenAtDate(cache) else { return "Updated: never" }
+    let absolute = Calendar.current.isDateInToday(date)
+        ? makeUpdateTimeFormatter().string(from: date)
+        : makeUpdateDateTimeFormatter().string(from: date)
+    return "Updated: \(absolute) · \(updateAgeText(since: date))"
+}
+
+private func updateTooltip(_ cache: UsageCache?) -> String {
+    guard let date = cacheWrittenAtDate(cache) else { return "Last updated: never" }
+    return "Last updated: \(makeUpdateTooltipFormatter().string(from: date))"
+}
+
 private func defaultConfigContents() -> String {
     return """
     {
@@ -384,6 +441,7 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         lastCacheMTime = currentMTime
         cache = decodeCache()
         statusItem.button?.title = renderSummary()
+        statusItem.button?.toolTip = updateTooltip(cache)
         return true
     }
 
@@ -409,6 +467,10 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         let summaryItem = NSMenuItem(title: renderSummary(), action: nil, keyEquivalent: "")
         summaryItem.isEnabled = false
         menu.addItem(summaryItem)
+
+        let updatedItem = NSMenuItem(title: updateMenuLabel(cache), action: nil, keyEquivalent: "")
+        updatedItem.isEnabled = false
+        menu.addItem(updatedItem)
 
         if collectorProcess != nil {
             let runningItem = NSMenuItem(title: "Refreshing…", action: nil, keyEquivalent: "")
