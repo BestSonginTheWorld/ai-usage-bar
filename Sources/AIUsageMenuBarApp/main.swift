@@ -3,13 +3,20 @@ import Foundation
 
 private let appID = "AIUsageMenuBar"
 private let bundleIdentifier = "local.ai-usage-menubar"
-private let appSupportURL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+private let homeDirectoryURL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+private let appSupportURL = homeDirectoryURL
     .appendingPathComponent("Library/Application Support/\(appID)", isDirectory: true)
 private let cacheURL = appSupportURL.appendingPathComponent("usage.json")
 private let configURL = appSupportURL.appendingPathComponent("config.json")
 private let logsURL = appSupportURL.appendingPathComponent("logs", isDirectory: true)
 private let appLogURL = logsURL.appendingPathComponent("app.log")
+private let runtimeURL = appSupportURL.appendingPathComponent("runtime", isDirectory: true)
 private let collectorURL = appSupportURL.appendingPathComponent("runtime/ai_usage_collector.py")
+private let launchAgentsURL = homeDirectoryURL.appendingPathComponent("Library/LaunchAgents", isDirectory: true)
+private let launchAgentLabel = "local.ai-usage-menubar-app"
+private let launchAgentURL = launchAgentsURL.appendingPathComponent("\(launchAgentLabel).plist")
+private let oldLaunchAgentURL = launchAgentsURL.appendingPathComponent("local.ai-usage-refresh.plist")
+private let oldXbarPluginURL = homeDirectoryURL.appendingPathComponent("Library/Application Support/xbar/plugins/ai_usage.5m.py")
 
 private struct AppConfig: Codable {
     let enabledProviders: [String]
@@ -185,6 +192,84 @@ private enum ProviderName: String, CaseIterable {
 private func ensureRuntimeDirs() {
     try? FileManager.default.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
     try? FileManager.default.createDirectory(at: logsURL, withIntermediateDirectories: true)
+    try? FileManager.default.createDirectory(at: runtimeURL, withIntermediateDirectories: true)
+}
+
+private func ensureLaunchAgentsDir() {
+    try? FileManager.default.createDirectory(at: launchAgentsURL, withIntermediateDirectories: true)
+}
+
+private func launchAgentContents(executablePath: String) -> String {
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+      <dict>
+        <key>Label</key>
+        <string>\(launchAgentLabel)</string>
+        <key>ProgramArguments</key>
+        <array>
+          <string>\(executablePath)</string>
+        </array>
+        <key>WorkingDirectory</key>
+        <string>\(appSupportURL.path)</string>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>StandardOutPath</key>
+        <string>\(logsURL.appendingPathComponent("launchd.out.log").path)</string>
+        <key>StandardErrorPath</key>
+        <string>\(logsURL.appendingPathComponent("launchd.err.log").path)</string>
+        <key>EnvironmentVariables</key>
+        <dict>
+          <key>PATH</key>
+          <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        </dict>
+      </dict>
+    </plist>
+    """
+}
+
+private func ensureBundledCollector() {
+    ensureRuntimeDirs()
+    guard let bundledCollectorURL = Bundle.main.url(forResource: "ai_usage_collector", withExtension: "py") else {
+        logLine("[app] bundled collector missing")
+        return
+    }
+
+    do {
+        let bundledData = try Data(contentsOf: bundledCollectorURL)
+        if let existingData = try? Data(contentsOf: collectorURL), existingData == bundledData {
+            return
+        }
+        try bundledData.write(to: collectorURL, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: collectorURL.path)
+        logLine("[app] bundled collector provisioned")
+    } catch {
+        logLine("[app] bundled collector provision_failed error=\(error)")
+    }
+}
+
+private func ensureLaunchAgentFile() {
+    ensureRuntimeDirs()
+    ensureLaunchAgentsDir()
+    try? FileManager.default.removeItem(at: oldLaunchAgentURL)
+    try? FileManager.default.removeItem(at: oldXbarPluginURL)
+
+    guard let executablePath = Bundle.main.executableURL?.path else {
+        logLine("[app] launchagent missing executable path")
+        return
+    }
+
+    let contents = launchAgentContents(executablePath: executablePath)
+    let existingContents = try? String(contentsOf: launchAgentURL, encoding: .utf8)
+    guard existingContents != contents else { return }
+
+    do {
+        try contents.write(to: launchAgentURL, atomically: true, encoding: .utf8)
+        logLine("[app] launchagent updated path=\(launchAgentURL.path)")
+    } catch {
+        logLine("[app] launchagent update_failed error=\(error)")
+    }
 }
 
 private func logLine(_ message: String) {
@@ -616,7 +701,9 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
             return
         }
         ensureRuntimeDirs()
+        ensureBundledCollector()
         ensureConfigFile()
+        ensureLaunchAgentFile()
         statusItem.button?.title = "AI --"
         loadConfig(force: true)
         loadCache(force: true)

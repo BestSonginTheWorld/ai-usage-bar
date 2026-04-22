@@ -37,6 +37,6 @@ jobs:
         with:
           name: AIUsageMenuBar-dev-${{ github.sha }}
           path: |
-            release/*.zip
+            release/*.pkg
             release/*.sha256
           if-no-files-found: error

@@ -22,6 +22,8 @@ env CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" \
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$EXECUTABLE_SRC" "$EXECUTABLE_DST"
+cp "$ROOT_DIR/ai_usage_collector.py" "$APP_BUNDLE/Contents/Resources/ai_usage_collector.py"
+cp "$ROOT_DIR/config.example.json" "$APP_BUNDLE/Contents/Resources/config.example.json"
 chmod +x "$EXECUTABLE_DST"
 
 cat >"$PLIST_PATH" <<PLIST

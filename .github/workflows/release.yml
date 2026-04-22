@@ -39,9 +39,9 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/*.zip release/*.sha256 --clobber
+            gh release upload "$TAG" release/*.pkg release/*.sha256 --clobber
           else
-            gh release create "$TAG" release/*.zip release/*.sha256 \
+            gh release create "$TAG" release/*.pkg release/*.sha256 \
               --title "$TAG" \
               --notes "Automated release for $TAG"
           fi

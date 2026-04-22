@@ -47,23 +47,20 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 PACKAGE_NAME="AIUsageMenuBar-${VERSION}"
-STAGE_DIR="$OUTPUT_DIR/$PACKAGE_NAME"
-ZIP_PATH="$OUTPUT_DIR/${PACKAGE_NAME}.zip"
+PKG_PATH="$OUTPUT_DIR/${PACKAGE_NAME}.pkg"
 SHA_PATH="$OUTPUT_DIR/${PACKAGE_NAME}.sha256"
 
-rm -rf "$STAGE_DIR" "$ZIP_PATH" "$SHA_PATH"
-mkdir -p "$STAGE_DIR"
+rm -f "$PKG_PATH" "$SHA_PATH"
+mkdir -p "$OUTPUT_DIR"
 
-cp -R "$APP_SOURCE" "$STAGE_DIR/AIUsageMenuBar.app"
-cp "$ROOT_DIR/ai_usage_collector.py" "$STAGE_DIR/ai_usage_collector.py"
-cp "$ROOT_DIR/config.example.json" "$STAGE_DIR/config.example.json"
-cp "$ROOT_DIR/scripts/install.sh" "$STAGE_DIR/install.sh"
-cp "$ROOT_DIR/scripts/uninstall.sh" "$STAGE_DIR/uninstall.sh"
-cp "$ROOT_DIR/INSTALL.txt" "$STAGE_DIR/README.txt"
-chmod +x "$STAGE_DIR/install.sh" "$STAGE_DIR/uninstall.sh"
+pkgbuild \
+  --identifier "local.ai-usage-menubar" \
+  --version "$VERSION" \
+  --component "$APP_SOURCE" \
+  --install-location "/Applications" \
+  "$PKG_PATH"
 
-COPYFILE_DISABLE=1 /usr/bin/ditto -c -k --norsrc --keepParent "$STAGE_DIR" "$ZIP_PATH"
-shasum -a 256 "$ZIP_PATH" >"$SHA_PATH"
+shasum -a 256 "$PKG_PATH" >"$SHA_PATH"
 
-echo "$ZIP_PATH"
+echo "$PKG_PATH"
 echo "$SHA_PATH"
