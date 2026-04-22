@@ -52,5 +52,6 @@ brew install --cask BestSonginTheWorld/ai-usage-bar/bestsongintheworld-ai-usage-
 주의
 - tap 저장소는 `https://github.com/BestSonginTheWorld/homebrew-ai-usage-bar` 이다.
 - `--cask`는 이 프로젝트가 CLI formula가 아니라 macOS 앱 번들이기 때문에 필요하다.
+- Homebrew cask 설치는 즉시 `launchctl bootstrap` 하지 않는다. 설치 후 앱을 한 번 직접 열고, 자동 시작은 다음 로그인부터 적용된다.
 - 현재 cask는 릴리스 ZIP의 URL과 SHA256을 직접 가리킨다.
 - 새 버전을 릴리스할 때는 `Casks/bestsongintheworld-ai-usage-bar.rb`의 `version`과 `sha256`도 같이 갱신해야 한다.

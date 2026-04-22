@@ -13,7 +13,7 @@ cask "bestsongintheworld-ai-usage-bar" do
 
   installer script: {
     executable: "AIUsageMenuBar-#{version}/install.sh",
-    args:       ["--use-prebuilt"],
+    args:       ["--use-prebuilt", "--no-launchagent"],
   }
 
   uninstall script: {
@@ -26,6 +26,10 @@ cask "bestsongintheworld-ai-usage-bar" do
 
       Installed app:
         ~/Applications/AIUsageMenuBar.app
+
+      Homebrew install skips immediate LaunchAgent registration to avoid
+      launchctl bootstrap failures during cask installation. Open the app
+      once manually after install. Auto-start will apply on the next login.
 
       First launch may show a macOS security warning because notarization is
       not configured yet. If needed, open the app once via Finder > right-click

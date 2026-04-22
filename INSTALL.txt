@@ -11,6 +11,10 @@ Homebrew 설치
    brew untap BestSonginTheWorld/ai-usage-bar
    brew install --cask BestSonginTheWorld/ai-usage-bar/bestsongintheworld-ai-usage-bar
 
+4. 설치 후 `AIUsageMenuBar.app`를 한 번 직접 실행합니다.
+   Homebrew 설치는 `launchctl` 충돌을 피하기 위해 즉시 LaunchAgent 등록을 건너뜁니다.
+   자동 시작은 다음 로그인부터 적용됩니다.
+
 업데이트
 
    brew update

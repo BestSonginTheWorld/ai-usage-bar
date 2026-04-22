@@ -125,9 +125,12 @@ if [[ "$SKIP_LAUNCHAGENT" -eq 0 ]]; then
 
   launchctl bootout "$GUI_DOMAIN" "$PLIST_PATH" >/dev/null 2>&1 || true
   pkill -x AIUsageMenuBarApp >/dev/null 2>&1 || true
-  launchctl bootstrap "$GUI_DOMAIN" "$PLIST_PATH"
-  launchctl enable "$GUI_DOMAIN/$LABEL" >/dev/null 2>&1 || true
-  launchctl kickstart -k "$GUI_DOMAIN/$LABEL" >/dev/null 2>&1 || true
+  if launchctl bootstrap "$GUI_DOMAIN" "$PLIST_PATH"; then
+    launchctl enable "$GUI_DOMAIN/$LABEL" >/dev/null 2>&1 || true
+    launchctl kickstart -k "$GUI_DOMAIN/$LABEL" >/dev/null 2>&1 || true
+  else
+    echo "Warning: LaunchAgent bootstrap failed. Open the app once manually or log out and back in to activate auto-start." >&2
+  fi
 else
   rm -f "$OLD_PLIST_PATH"
   rm -f "$OLD_XBAR_PLUGIN_PATH"
