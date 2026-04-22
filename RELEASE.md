@@ -8,6 +8,7 @@ AIUsageMenuBar GitHub Release Flow
 - `AIUsageMenuBar.app`
 - `AIUsageMenuBar-x.y.z.zip`
 - `AIUsageMenuBar-x.y.z.sha256`
+- Homebrew cask 메타데이터는 저장소의 `Casks/` 디렉터리에서 관리
 
 자동화 구성
 - `.github/workflows/package.yml`
@@ -42,3 +43,13 @@ git push origin v0.1.0
 - App Store 배포가 아니다.
 - Apple Developer ID 서명 및 notarization은 아직 포함하지 않았다.
 - 따라서 외부 사용자 Mac에서는 첫 실행 시 Gatekeeper 경고가 나타날 수 있다.
+
+Homebrew 설치 방식
+```bash
+brew tap BestSonginTheWorld/ai-usage-bar
+brew install --cask bestsongintheworld-ai-usage-bar
+```
+
+주의
+- 현재 cask는 릴리스 ZIP의 URL과 SHA256을 직접 가리킨다.
+- 새 버전을 릴리스할 때는 `Casks/bestsongintheworld-ai-usage-bar.rb`의 `version`과 `sha256`도 같이 갱신해야 한다.
