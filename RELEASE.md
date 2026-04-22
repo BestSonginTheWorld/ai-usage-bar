@@ -8,7 +8,7 @@ AIUsageMenuBar GitHub Release Flow
 - `AIUsageMenuBar.app`
 - `AIUsageMenuBar-x.y.z.zip`
 - `AIUsageMenuBar-x.y.z.sha256`
-- Homebrew cask 메타데이터는 저장소의 `Casks/` 디렉터리에서 관리
+- Homebrew cask 메타데이터는 tap 저장소 `BestSonginTheWorld/homebrew-ai-usage-bar`에서 관리
 
 자동화 구성
 - `.github/workflows/package.yml`
@@ -51,5 +51,6 @@ brew install --cask bestsongintheworld-ai-usage-bar
 ```
 
 주의
+- tap 저장소는 `https://github.com/BestSonginTheWorld/homebrew-ai-usage-bar` 이다.
 - 현재 cask는 릴리스 ZIP의 URL과 SHA256을 직접 가리킨다.
 - 새 버전을 릴리스할 때는 `Casks/bestsongintheworld-ai-usage-bar.rb`의 `version`과 `sha256`도 같이 갱신해야 한다.
