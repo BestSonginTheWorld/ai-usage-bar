@@ -12,12 +12,12 @@ cask "bestsongintheworld-ai-usage-bar" do
   depends_on formula: "tmux"
 
   installer script: {
-    executable: "install.sh",
+    executable: "AIUsageMenuBar-#{version}/install.sh",
     args:       ["--use-prebuilt"],
   }
 
   uninstall script: {
-    executable: "uninstall.sh",
+    executable: "AIUsageMenuBar-#{version}/uninstall.sh",
   }
 
   caveats do

@@ -46,11 +46,11 @@ git push origin v0.1.0
 
 Homebrew 설치 방식
 ```bash
-brew tap BestSonginTheWorld/ai-usage-bar
-brew install --cask bestsongintheworld-ai-usage-bar
+brew install --cask BestSonginTheWorld/ai-usage-bar/bestsongintheworld-ai-usage-bar
 ```
 
 주의
 - tap 저장소는 `https://github.com/BestSonginTheWorld/homebrew-ai-usage-bar` 이다.
+- `--cask`는 이 프로젝트가 CLI formula가 아니라 macOS 앱 번들이기 때문에 필요하다.
 - 현재 cask는 릴리스 ZIP의 URL과 SHA256을 직접 가리킨다.
 - 새 버전을 릴리스할 때는 `Casks/bestsongintheworld-ai-usage-bar.rb`의 `version`과 `sha256`도 같이 갱신해야 한다.
