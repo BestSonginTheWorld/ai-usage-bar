@@ -739,7 +739,13 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         if force || refreshTimer == nil || previousInterval != appConfig.refreshIntervalSeconds {
             scheduleRefreshTimer()
         }
+        statusItem.button?.title = renderSummary()
         return true
+    }
+
+    private func configuredProviderNames() -> [ProviderName] {
+        let enabled = Set(appConfig.enabledProviders)
+        return ProviderName.allCases.filter { enabled.contains($0.rawValue) }
     }
 
     private func scheduleRefreshTimer() {
@@ -790,8 +796,8 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         var parts: [String] = []
         var needsAttention = false
 
-        for providerName in ProviderName.allCases {
-            guard let provider = cache.providers[providerName.rawValue], provider.enabled == true else { continue }
+        for providerName in configuredProviderNames() {
+            guard let provider = cache.providers[providerName.rawValue] else { continue }
             parts.append("\(providerName.shortTitle) \(providerSummary(provider))")
             needsAttention = needsAttention || hasBlocker(provider) || ["error", "blocked", "unavailable"].contains(provider.status) || provider.stale == true
         }
@@ -821,8 +827,8 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         menu.addItem(.separator())
 
         if let cache {
-            let enabledProviders = ProviderName.allCases.compactMap { providerName in
-                cache.providers[providerName.rawValue]?.enabled == true ? cache.providers[providerName.rawValue] : nil
+            let enabledProviders = configuredProviderNames().compactMap { providerName in
+                cache.providers[providerName.rawValue]
             }
             if enabledProviders.contains(where: hasBlocker) {
                 let allItem = NSMenuItem(title: allBlockersLabel(enabledProviders), action: #selector(continueAll), keyEquivalent: "")
@@ -833,8 +839,8 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
             }
         }
 
-        for providerName in ProviderName.allCases {
-            guard let provider = cache?.providers[providerName.rawValue], provider.enabled == true else { continue }
+        for providerName in configuredProviderNames() {
+            guard let provider = cache?.providers[providerName.rawValue] else { continue }
             appendProviderSection(into: menu, providerName: providerName, provider: provider)
             menu.addItem(.separator())
         }
@@ -983,7 +989,14 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
     }
 
     @objc private func continueAll() {
-        runCollector(arguments: ["resolve", "--yes"], reason: "continue_all")
+        let providers: [String] = configuredProviderNames().compactMap { providerName -> String? in
+            guard let provider = cache?.providers[providerName.rawValue], hasBlocker(provider) else {
+                return nil
+            }
+            return providerName.rawValue
+        }
+        guard !providers.isEmpty else { return }
+        runCollector(arguments: ["resolve", "--providers", providers.joined(separator: ","), "--yes"], reason: "continue_all")
     }
 
     @objc private func continueProvider(_ sender: NSMenuItem) {
