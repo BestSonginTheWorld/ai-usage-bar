@@ -1,0 +1,42 @@
+name: Package
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: macos-15
+
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v4
+
+      - name: Show Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+          python3 --version
+
+      - name: Run Python Tests
+        run: python3 -m unittest legacy/tests/test_ai_usage_collector.py
+
+      - name: Build Package Artifact
+        run: |
+          VERSION="dev-${GITHUB_SHA::7}"
+          ./scripts/package_release.sh --version="$VERSION"
+
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIUsageMenuBar-dev-${{ github.sha }}
+          path: |
+            release/*.zip
+            release/*.sha256
+          if-no-files-found: error

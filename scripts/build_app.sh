@@ -10,10 +10,14 @@ APP_BUNDLE="$DIST_DIR/${APP_NAME}.app"
 EXECUTABLE_SRC="$BUILD_DIR/$PRODUCT_NAME"
 EXECUTABLE_DST="$APP_BUNDLE/Contents/MacOS/$PRODUCT_NAME"
 PLIST_PATH="$APP_BUNDLE/Contents/Info.plist"
+CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/clang-module-cache"
+APP_VERSION="${APP_VERSION:-0.1.0}"
+APP_BUILD="${APP_BUILD:-1}"
 
-mkdir -p "$DIST_DIR"
+mkdir -p "$DIST_DIR" "$CLANG_MODULE_CACHE_PATH"
 
-swift build -c release --product "$PRODUCT_NAME" >&2
+env CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" \
+  swift build -c release --product "$PRODUCT_NAME" >&2
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
@@ -36,9 +40,9 @@ cat >"$PLIST_PATH" <<PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${APP_BUILD}</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -48,5 +52,7 @@ cat >"$PLIST_PATH" <<PLIST
   </dict>
 </plist>
 PLIST
+
+codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null
 
 echo "$APP_BUNDLE"

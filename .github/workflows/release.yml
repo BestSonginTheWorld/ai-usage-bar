@@ -1,0 +1,47 @@
+name: Release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v4
+
+      - name: Show Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+          python3 --version
+
+      - name: Run Python Tests
+        run: python3 -m unittest legacy/tests/test_ai_usage_collector.py
+
+      - name: Build Release Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/package_release.sh --version="$VERSION"
+
+      - name: Publish GitHub Release Assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.zip release/*.sha256 --clobber
+          else
+            gh release create "$TAG" release/*.zip release/*.sha256 \
+              --title "$TAG" \
+              --notes "Automated release for $TAG"
+          fi

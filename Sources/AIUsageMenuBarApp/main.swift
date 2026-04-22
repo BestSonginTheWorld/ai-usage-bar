@@ -11,21 +11,47 @@ private let logsURL = appSupportURL.appendingPathComponent("logs", isDirectory: 
 private let appLogURL = logsURL.appendingPathComponent("app.log")
 private let collectorURL = appSupportURL.appendingPathComponent("runtime/ai_usage_collector.py")
 
-private struct AppConfig: Decodable {
+private struct AppConfig: Codable {
+    let enabledProviders: [String]
     let refreshIntervalSeconds: Int
+    let staleAfterSeconds: Int
+    let staleAfterFailures: Int
+    let debugCaptures: Bool
     let resetLabelStyle: String
     let showResetLabels: Bool
     let showSonnetMetric: Bool
     let showErrorDetails: Bool
 
+    private static let defaultProviders = ["claude", "codex"]
+
+    private static func normalizeEnabledProviders(_ providers: [String]) -> [String] {
+        let allowed = Set(ProviderName.allCases.map(\.rawValue))
+        var seen = Set<String>()
+        var normalized: [String] = []
+        for provider in providers.map({ $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }) where allowed.contains(provider) {
+            if seen.insert(provider).inserted {
+                normalized.append(provider)
+            }
+        }
+        return normalized.isEmpty ? defaultProviders : normalized
+    }
+
     init(
+        enabledProviders: [String] = Self.defaultProviders,
         refreshIntervalSeconds: Int = 900,
+        staleAfterSeconds: Int = 1800,
+        staleAfterFailures: Int = 2,
+        debugCaptures: Bool = true,
         resetLabelStyle: String = "friendly",
         showResetLabels: Bool = true,
         showSonnetMetric: Bool = true,
         showErrorDetails: Bool = true
     ) {
+        self.enabledProviders = Self.normalizeEnabledProviders(enabledProviders)
         self.refreshIntervalSeconds = max(60, refreshIntervalSeconds)
+        self.staleAfterSeconds = max(60, staleAfterSeconds)
+        self.staleAfterFailures = max(1, staleAfterFailures)
+        self.debugCaptures = debugCaptures
         self.resetLabelStyle = resetLabelStyle == "source" ? "source" : "friendly"
         self.showResetLabels = showResetLabels
         self.showSonnetMetric = showSonnetMetric
@@ -35,7 +61,11 @@ private struct AppConfig: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
+            enabledProviders: try container.decodeIfPresent([String].self, forKey: .enabledProviders) ?? Self.defaultProviders,
             refreshIntervalSeconds: try container.decodeIfPresent(Int.self, forKey: .refreshIntervalSeconds) ?? 900,
+            staleAfterSeconds: try container.decodeIfPresent(Int.self, forKey: .staleAfterSeconds) ?? 1800,
+            staleAfterFailures: try container.decodeIfPresent(Int.self, forKey: .staleAfterFailures) ?? 2,
+            debugCaptures: try container.decodeIfPresent(Bool.self, forKey: .debugCaptures) ?? true,
             resetLabelStyle: (try container.decodeIfPresent(String.self, forKey: .resetLabelStyle) ?? "friendly").lowercased(),
             showResetLabels: try container.decodeIfPresent(Bool.self, forKey: .showResetLabels) ?? true,
             showSonnetMetric: try container.decodeIfPresent(Bool.self, forKey: .showSonnetMetric) ?? true,
@@ -44,7 +74,11 @@ private struct AppConfig: Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case enabledProviders = "enabled_providers"
         case refreshIntervalSeconds = "refresh_interval_seconds"
+        case staleAfterSeconds = "stale_after_seconds"
+        case staleAfterFailures = "stale_after_failures"
+        case debugCaptures = "debug_captures"
         case resetLabelStyle = "reset_label_style"
         case showResetLabels = "show_reset_labels"
         case showSonnetMetric = "show_sonnet_metric"
@@ -53,6 +87,29 @@ private struct AppConfig: Decodable {
 }
 
 private let defaultAppConfig = AppConfig()
+
+private func makeConfigJSONEncoder() -> JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    return encoder
+}
+
+private func appConfigContents(_ config: AppConfig) -> String {
+    let encoder = makeConfigJSONEncoder()
+    guard let data = try? encoder.encode(config),
+          var text = String(data: data, encoding: .utf8) else {
+        return "{}\n"
+    }
+    if !text.hasSuffix("\n") {
+        text.append("\n")
+    }
+    return text
+}
+
+private func writeAppConfig(_ config: AppConfig) throws {
+    ensureRuntimeDirs()
+    try appConfigContents(config).write(to: configURL, atomically: true, encoding: .utf8)
+}
 
 private struct UsageCache: Decodable {
     let writtenAt: String?
@@ -211,19 +268,7 @@ private func updateTooltip(_ cache: UsageCache?) -> String {
 }
 
 private func defaultConfigContents() -> String {
-    return """
-    {
-      "enabled_providers": ["claude", "codex"],
-      "refresh_interval_seconds": 900,
-      "stale_after_seconds": 1800,
-      "stale_after_failures": 2,
-      "debug_captures": true,
-      "reset_label_style": "friendly",
-      "show_reset_labels": true,
-      "show_sonnet_metric": true,
-      "show_error_details": true
-    }
-    """
+    appConfigContents(defaultAppConfig)
 }
 
 private func ensureConfigFile() {
@@ -344,6 +389,213 @@ private func shouldShowContinueAction(for provider: ProviderState?) -> Bool {
 }
 
 @MainActor
+private final class SettingsWindowController: NSWindowController {
+    var onSave: ((AppConfig) -> Void)?
+
+    private let claudeCheckbox = NSButton(checkboxWithTitle: "Claude", target: nil, action: nil)
+    private let codexCheckbox = NSButton(checkboxWithTitle: "Codex", target: nil, action: nil)
+    private let refreshIntervalField = NSTextField(string: "")
+    private let staleAfterSecondsField = NSTextField(string: "")
+    private let staleAfterFailuresField = NSTextField(string: "")
+    private let resetLabelStylePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let debugCapturesCheckbox = NSButton(checkboxWithTitle: "Save debug captures", target: nil, action: nil)
+    private let showResetLabelsCheckbox = NSButton(checkboxWithTitle: "Show reset labels", target: nil, action: nil)
+    private let showSonnetMetricCheckbox = NSButton(checkboxWithTitle: "Show Claude Sonnet metric", target: nil, action: nil)
+    private let showErrorDetailsCheckbox = NSButton(checkboxWithTitle: "Show error details", target: nil, action: nil)
+
+    init(config: AppConfig) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 430),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        super.init(window: window)
+        shouldCascadeWindows = true
+        window.title = "AI Usage Settings"
+        window.isReleasedWhenClosed = false
+        window.center()
+        buildInterface()
+        apply(config: config)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func apply(config: AppConfig) {
+        claudeCheckbox.state = config.enabledProviders.contains("claude") ? .on : .off
+        codexCheckbox.state = config.enabledProviders.contains("codex") ? .on : .off
+        refreshIntervalField.stringValue = String(config.refreshIntervalSeconds)
+        staleAfterSecondsField.stringValue = String(config.staleAfterSeconds)
+        staleAfterFailuresField.stringValue = String(config.staleAfterFailures)
+        resetLabelStylePopup.selectItem(withTag: config.resetLabelStyle == "source" ? 1 : 0)
+        debugCapturesCheckbox.state = config.debugCaptures ? .on : .off
+        showResetLabelsCheckbox.state = config.showResetLabels ? .on : .off
+        showSonnetMetricCheckbox.state = config.showSonnetMetric ? .on : .off
+        showErrorDetailsCheckbox.state = config.showErrorDetails ? .on : .off
+    }
+
+    private func buildInterface() {
+        let contentView = NSView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        window?.contentView = contentView
+
+        configureControls()
+
+        let providersStack = NSStackView(views: [claudeCheckbox, codexCheckbox])
+        providersStack.orientation = .horizontal
+        providersStack.spacing = 16
+        providersStack.alignment = .centerY
+
+        let generalGrid = NSGridView(views: [
+            [makeFieldLabel("Refresh interval (sec)"), refreshIntervalField],
+            [makeFieldLabel("Stale after (sec)"), staleAfterSecondsField],
+            [makeFieldLabel("Stale after failures"), staleAfterFailuresField],
+            [makeFieldLabel("Reset label style"), resetLabelStylePopup],
+        ])
+        generalGrid.rowSpacing = 10
+        generalGrid.columnSpacing = 12
+        generalGrid.column(at: 0).xPlacement = .trailing
+        generalGrid.column(at: 1).xPlacement = .fill
+
+        let displayStack = NSStackView(views: [
+            debugCapturesCheckbox,
+            showResetLabelsCheckbox,
+            showSonnetMetricCheckbox,
+            showErrorDetailsCheckbox,
+        ])
+        displayStack.orientation = .vertical
+        displayStack.spacing = 8
+        displayStack.alignment = .leading
+
+        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveSettings))
+        saveButton.keyEquivalent = "\r"
+        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelSettings))
+        let spacer = NSView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        let buttonsStack = NSStackView(views: [spacer, cancelButton, saveButton])
+        buttonsStack.orientation = .horizontal
+        buttonsStack.spacing = 10
+        buttonsStack.alignment = .centerY
+
+        let rootStack = NSStackView(views: [
+            makeSectionLabel("Providers"),
+            providersStack,
+            makeSectionLabel("Collection"),
+            generalGrid,
+            makeSectionLabel("Display"),
+            displayStack,
+            buttonsStack,
+        ])
+        rootStack.orientation = .vertical
+        rootStack.spacing = 14
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
+
+        contentView.addSubview(rootStack)
+
+        NSLayoutConstraint.activate([
+            rootStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            rootStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            rootStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            rootStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -20),
+            refreshIntervalField.widthAnchor.constraint(equalToConstant: 120),
+            staleAfterSecondsField.widthAnchor.constraint(equalToConstant: 120),
+            staleAfterFailuresField.widthAnchor.constraint(equalToConstant: 120),
+            resetLabelStylePopup.widthAnchor.constraint(equalToConstant: 160),
+            spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
+        ])
+    }
+
+    private func configureControls() {
+        [refreshIntervalField, staleAfterSecondsField, staleAfterFailuresField].forEach { field in
+            field.alignment = .right
+            field.controlSize = .regular
+        }
+
+        resetLabelStylePopup.removeAllItems()
+        resetLabelStylePopup.addItem(withTitle: "Friendly")
+        resetLabelStylePopup.lastItem?.tag = 0
+        resetLabelStylePopup.addItem(withTitle: "Source")
+        resetLabelStylePopup.lastItem?.tag = 1
+    }
+
+    private func makeSectionLabel(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title)
+        label.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        return label
+    }
+
+    private func makeFieldLabel(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title)
+        label.alignment = .right
+        return label
+    }
+
+    private func parsePositiveInt(from field: NSTextField, name: String, minimum: Int) -> Int? {
+        let rawValue = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(rawValue) else {
+            presentValidationError("\(name) must be a whole number.")
+            return nil
+        }
+        guard value >= minimum else {
+            presentValidationError("\(name) must be at least \(minimum).")
+            return nil
+        }
+        return value
+    }
+
+    private func presentValidationError(_ message: String) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Invalid Settings"
+        alert.informativeText = message
+        alert.beginSheetModal(for: window)
+    }
+
+    @objc private func saveSettings() {
+        var enabledProviders: [String] = []
+        if claudeCheckbox.state == .on {
+            enabledProviders.append("claude")
+        }
+        if codexCheckbox.state == .on {
+            enabledProviders.append("codex")
+        }
+        guard !enabledProviders.isEmpty else {
+            presentValidationError("Enable at least one provider.")
+            return
+        }
+
+        guard let refreshIntervalSeconds = parsePositiveInt(from: refreshIntervalField, name: "Refresh interval", minimum: 60),
+              let staleAfterSeconds = parsePositiveInt(from: staleAfterSecondsField, name: "Stale after", minimum: 60),
+              let staleAfterFailures = parsePositiveInt(from: staleAfterFailuresField, name: "Stale after failures", minimum: 1) else {
+            return
+        }
+
+        let config = AppConfig(
+            enabledProviders: enabledProviders,
+            refreshIntervalSeconds: refreshIntervalSeconds,
+            staleAfterSeconds: staleAfterSeconds,
+            staleAfterFailures: staleAfterFailures,
+            debugCaptures: debugCapturesCheckbox.state == .on,
+            resetLabelStyle: resetLabelStylePopup.selectedTag() == 1 ? "source" : "friendly",
+            showResetLabels: showResetLabelsCheckbox.state == .on,
+            showSonnetMetric: showSonnetMetricCheckbox.state == .on,
+            showErrorDetails: showErrorDetailsCheckbox.state == .on
+        )
+
+        onSave?(config)
+        window?.performClose(nil)
+    }
+
+    @objc private func cancelSettings() {
+        window?.performClose(nil)
+    }
+}
+
+@MainActor
 private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let shared = AppController()
 
@@ -351,6 +603,7 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
     private var refreshTimer: Timer?
     private var cachePollTimer: Timer?
     private var collectorProcess: Process?
+    private var settingsWindowController: SettingsWindowController?
     private var cache: UsageCache?
     private var appConfig = defaultAppConfig
     private var lastCacheMTime: Date?
@@ -656,9 +909,41 @@ private final class AppController: NSObject, NSApplicationDelegate, NSMenuDelega
         runCollector(arguments: ["repair", "--providers", provider], reason: "repair_\(provider)")
     }
 
+    private func saveSettings(_ config: AppConfig) {
+        do {
+            try writeAppConfig(config)
+            _ = loadConfig(force: true)
+            rebuildMenu()
+            logLine("[app] config saved")
+            if collectorProcess == nil {
+                runCollector(arguments: [], reason: "settings_saved")
+            }
+        } catch {
+            logLine("[app] config save_failed error=\(error)")
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "Could not Save Settings"
+            alert.informativeText = String(describing: error)
+            alert.runModal()
+        }
+    }
+
     @objc private func openSettings() {
         ensureConfigFile()
-        NSWorkspace.shared.open(configURL)
+        loadConfig(force: true)
+
+        if settingsWindowController == nil {
+            let controller = SettingsWindowController(config: appConfig)
+            controller.onSave = { [weak self] config in
+                self?.saveSettings(config)
+            }
+            settingsWindowController = controller
+        }
+
+        settingsWindowController?.apply(config: appConfig)
+        settingsWindowController?.showWindow(nil)
+        settingsWindowController?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func openLogs() {

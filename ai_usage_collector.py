@@ -598,7 +598,7 @@ def format_clock_label(dt: datetime) -> str:
 
 
 def format_friendly_reset_label(dt: datetime) -> str:
-    local_dt = dt.astimezone()
+    local_dt = dt if dt.tzinfo is not None else dt.astimezone()
     return f"{local_dt.strftime('%b')} {local_dt.day} at {format_clock_label(local_dt)}"
 
 
@@ -689,7 +689,10 @@ def _try_parse_time_24h(raw: str, now_local: datetime) -> str | None:
 
 def normalize_reset_label(label: str, reference_now: datetime | None = None) -> str:
     raw = label.strip()
-    now_local = reference_now.astimezone() if reference_now is not None else datetime.now().astimezone()
+    if reference_now is not None:
+        now_local = reference_now if reference_now.tzinfo is not None else reference_now.astimezone()
+    else:
+        now_local = datetime.now().astimezone()
     local_tz = now_local.tzinfo
 
     return (
